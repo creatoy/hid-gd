@@ -1,0 +1,121 @@
+# Action name
+name: Deploy
+
+# 触发条件，这里是新的 tag 被 push 时触发
+on:
+  push:
+    tags:
+      # 正则匹配 tag 格式，如 v0.1.0
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 实际工作
+jobs:
+  build-and-upload:
+    name: Build and Upload
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      # 配置编译目标平台，这里是在 Ubuntu, MacOS, Windows 上分别编译
+      matrix:
+        include:
+          - build: linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            features: "linux-shared-hidraw"
+
+          - build: macos
+            os: macos-latest
+            target: x86_64-apple-darwin
+            features: ""
+        
+          - build: windows
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            features: ""
+    # 执行流程
+    steps:
+      # 克隆仓库代码
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      # 获取发布版本号
+      - name: Get the release version from the tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      # 安装 rust
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@stable
+        # 将上面配置的 target 传入
+        with:
+          targets: ${{ matrix.target }}
+      
+      # 安装依赖库
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ "${{ matrix.build }}" = "linux" ]; then
+            set -eux
+            sudo apt-get update -y
+            sudo apt-get install -y libudev-dev
+            # sudo apt-get install -y libusb-1.0.0-dev
+            sudo apt-get install -y tree
+          elif [ "${{ matrix.build }}" = "macos" ]; then
+            brew install tree
+          fi
+    
+      # 构建二进制文件
+      - name: Build binary files
+        uses: actions-rs/cargo@v1
+        with:
+          # use-cross: true
+          command: build
+          args: --verbose --release --target ${{ matrix.target }}
+
+      # 打包上传二进制文件
+      - name: Archive files
+        shell: bash
+        run: |
+          bin_name="hid"
+          bin_dir="addons/hid/bin"
+          
+          mkdir -p "$bin_dir"
+          if [ "${{ matrix.build }}" = "linux" ]; then
+            bin_file="lib$bin_name.${{ matrix.build }}.so"
+            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file
+          elif [ "${{ matrix.build }}" = "macos" ]; then
+            bin_file="lib$bin_name.${{ matrix.build }}.dylib"
+            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file
+          else
+            bin_file="$bin_name.${{ matrix.build }}.dll"
+            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file
+          fi
+
+          cat>$bin_dir/../$bin_name.gdextension<<EOF
+          [configuration]
+          entry_symbol = "hid_lib_init"
+          compatibility_minimum = 4.0
+          [libraries]
+          ${{ matrix.build }}.x86_64 = "bin/$bin_file"
+          EOF
+
+          archive_name="$bin_name-${{ env.VERSION }}-${{ matrix.build }}"
+          if [ "${{ matrix.build }}" = "windows" ]; then
+            7z a "$archive_name.zip" "addons"
+            echo "ASSET=$archive_name.zip" >> $GITHUB_ENV
+          else
+            tree addons
+            tar -czvf "$archive_name.tar.gz" "addons"
+            echo "ASSET=$archive_name.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Release files
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ASSET }}
