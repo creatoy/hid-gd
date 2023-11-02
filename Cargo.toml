@@ -9,5 +9,5 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-hidapi = "2.3.3"
+hidapi = "2.4.1"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
