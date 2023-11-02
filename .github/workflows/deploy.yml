@@ -23,17 +23,23 @@ jobs:
       # 配置编译目标平台，这里是在 Ubuntu, MacOS, Windows 上分别编译
       matrix:
         include:
-          - build: linux
+          - name: Linux (GCC)
+            platform: linux
+            arch: x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             features: "linux-shared-hidraw"
 
-          - build: macos
+          - name: MacOS (CLANG)
+            platform: macos
+            arch: x86_64
             os: macos-latest
             target: x86_64-apple-darwin
             features: ""
         
-          - build: windows
+          - name: Windows (MSVC)
+            platform: windows
+            arch: x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             features: ""
@@ -42,6 +48,8 @@ jobs:
       # 克隆仓库代码
       - name: Clone repository
         uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       # 获取发布版本号
       - name: Get the release version from the tag
@@ -51,7 +59,7 @@ jobs:
       # 安装 rust
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
-        # 将上面配置的 target 传入
+        # 将上面配置的 target 传入以安装工具链
         with:
           targets: ${{ matrix.target }}
       
@@ -59,18 +67,25 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          if [ "${{ matrix.build }}" = "linux" ]; then
+          if [ "${{ matrix.platform }}" = "linux" ]; then
             set -eux
-            sudo apt-get update -y
-            sudo apt-get install -y libudev-dev
-            # sudo apt-get install -y libusb-1.0.0-dev
-            sudo apt-get install -y tree
-          elif [ "${{ matrix.build }}" = "macos" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -qqq libudev-dev
+            # sudo apt-get install -qqq libusb-1.0.0-dev
+            sudo apt-get install -qqq tree
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
             brew install tree
           fi
     
       # 构建二进制文件
-      - name: Build binary files
+      - name: Build binary files (debug)
+        uses: actions-rs/cargo@v1
+        with:
+          # use-cross: true
+          command: build
+          args: --verbose --target ${{ matrix.target }}
+
+      - name: Build binary files (release)
         uses: actions-rs/cargo@v1
         with:
           # use-cross: true
@@ -81,31 +96,47 @@ jobs:
       - name: Archive files
         shell: bash
         run: |
-          bin_name="hid"
-          bin_dir="addons/hid/bin"
+          addon_name="hid"
+          bin_dir="addons/$addon_name/bin"
+          bin_name="${addon_name}_ext"
           
-          mkdir -p "$bin_dir"
-          if [ "${{ matrix.build }}" = "linux" ]; then
-            bin_file="lib$bin_name.${{ matrix.build }}.so"
-            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file
-          elif [ "${{ matrix.build }}" = "macos" ]; then
-            bin_file="lib$bin_name.${{ matrix.build }}.dylib"
-            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file
+          mkdir -p $bin_dir
+
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.so"
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.so"
+
+            mv target/${{ matrix.target }}/debug/lib$bin_name.so $bin_dir/$bin_file_debug
+            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file_release
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dylib"
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dylib"
+
+            mv target/${{ matrix.target }}/debug/lib$bin_name.dylib $bin_dir/$bin_file_debug
+            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file_release
+          elif [ "${{ matrix.platform }}" = "windows" ]; then
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dll"
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dll"
+
+            mv target/${{ matrix.target }}/debug/$bin_name.dll $bin_dir/$bin_file_debug
+            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file_release
           else
-            bin_file="$bin_name.${{ matrix.build }}.dll"
-            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file
+            echo "Unsupported platform: ${{ matrix.platform }}"
           fi
 
-          cat>$bin_dir/../$bin_name.gdextension<<EOF
+          cat>$bin_dir/../$addon_name.gdextension<<EOF
           [configuration]
-          entry_symbol = "hid_lib_init"
+          entry_symbol = "${addon_name}_ext_init"
           compatibility_minimum = 4.1
+
           [libraries]
-          ${{ matrix.build }}.x86_64 = "bin/$bin_file"
+          ${{ matrix.platform }}.debug.${{ matrix.arch }} = "bin/$bin_file_debug"
+          ${{ matrix.platform }}.release.${{ matrix.arch }} = "bin/$bin_file_release"
+
           EOF
 
-          archive_name="$bin_name-${{ env.VERSION }}-${{ matrix.build }}"
-          if [ "${{ matrix.build }}" = "windows" ]; then
+          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
             7z a "$archive_name.zip" "addons"
             echo "ASSET=$archive_name.zip" >> $GITHUB_ENV
           else
