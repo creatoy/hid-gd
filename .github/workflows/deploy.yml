@@ -78,7 +78,14 @@ jobs:
           fi
     
       # 构建二进制文件
-      - name: Build binary files
+      - name: Build binary files (debug)
+        uses: actions-rs/cargo@v1
+        with:
+          # use-cross: true
+          command: build
+          args: --verbose --target ${{ matrix.target }}
+
+      - name: Build binary files (release)
         uses: actions-rs/cargo@v1
         with:
           # use-cross: true
@@ -89,31 +96,46 @@ jobs:
       - name: Archive files
         shell: bash
         run: |
-          bin_name="hid"
-          bin_dir="addons/$bin_name/bin"
+          addon_name="hid"
+          bin_dir="addons/$addon_name/bin"
+          bin_name="${addon_name}_ext"
           
-          mkdir -p "$bin_dir"
+          mkdir -p $bin_dir
 
           if [ "${{ matrix.platform }}" = "linux" ]; then
-            bin_file="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.so"
-            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.so"
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.so"
+
+            mv target/${{ matrix.target }}/debug/lib$bin_name.so $bin_dir/$bin_file_debug
+            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file_release
           elif [ "${{ matrix.platform }}" = "macos" ]; then
-            bin_file="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.dylib"
-            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dylib"
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dylib"
+
+            mv target/${{ matrix.target }}/debug/lib$bin_name.dylib $bin_dir/$bin_file_debug
+            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file_release
+          elif [ "${{ matrix.platform }}" = "windows" ]; then
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dll"
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dll"
+
+            mv target/${{ matrix.target }}/debug/$bin_name.dll $bin_dir/$bin_file_debug
+            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file_release
           else
-            bin_file="$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.dll"
-            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file
+            echo "Unsupported platform: ${{ matrix.platform }}"
           fi
 
-          cat>$bin_dir/../$bin_name.gdextension<<EOF
+          cat>$bin_dir/../$addon_name.gdextension<<EOF
           [configuration]
-          entry_symbol = "${bin_name}_lib_init"
+          entry_symbol = "${addon_name}_ext_init"
           compatibility_minimum = 4.1
+
           [libraries]
-          ${{ matrix.platform }}.${{ matrix.arch }} = "bin/$bin_file"
+          ${{ matrix.platform }}.debug.${{ matrix.arch }} = "bin/$bin_file_debug"
+          ${{ matrix.platform }}.release.${{ matrix.arch }} = "bin/$bin_file_release"
+
           EOF
 
-          archive_name="$bin_name-${{ env.VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
+          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
           if [ "${{ matrix.platform }}" = "windows" ]; then
             7z a "$archive_name.zip" "addons"
             echo "ASSET=$archive_name.zip" >> $GITHUB_ENV
