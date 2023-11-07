@@ -1,6 +1,6 @@
 [package]
 name = "hid"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,3 +12,6 @@ crate-type = ["cdylib"]
 [dependencies]
 hidapi = "2.4.1"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
+
+[profile.dev]
+split-debuginfo = "packed"
