@@ -23,21 +23,28 @@ jobs:
       # 配置编译目标平台，这里是在 Ubuntu, MacOS, Windows 上分别编译
       matrix:
         include:
-          - name: Linux (GCC)
+          - name: Linux (x64)
             platform: linux
             arch: x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             features: "linux-shared-hidraw"
 
-          - name: MacOS (CLANG)
+          - name: MacOS (x64)
             platform: macos
             arch: x86_64
             os: macos-latest
             target: x86_64-apple-darwin
             features: ""
         
-          - name: Windows (MSVC)
+          - name: MacOS (aarch64)
+            platform: macos
+            arch: aarch64
+            os: macos-13-arm64
+            target: aarch64-apple-darwin
+            features: ""
+        
+          - name: Windows (x64)
             platform: windows
             arch: x86_64
             os: windows-latest
