@@ -92,7 +92,7 @@ jobs:
             # if [ "${{ matrix.command }}" = "cross" ]; then
             #   curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
             #   cargo binstall --no-confirm cross
-            fi
+            # fi
           fi
     
       # 构建二进制文件
