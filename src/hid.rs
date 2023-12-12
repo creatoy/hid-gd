@@ -74,7 +74,7 @@ impl Hid {
     }
 
     #[func]
-    fn open_serial(&mut self, vid: u16, pid: u16, serial_number: GodotString) -> bool {
+    fn open_serial(&mut self, vid: u16, pid: u16, serial_number: GString) -> bool {
         match HidApi::new() {
             Ok(api) => match api.open_serial(vid, pid, serial_number.to_string().as_str()) {
                 Ok(dev) => {
@@ -94,7 +94,7 @@ impl Hid {
     }
 
     #[func]
-    fn open_path(&mut self, path: GodotString) -> bool {
+    fn open_path(&mut self, path: GString) -> bool {
         match HidApi::new() {
             Ok(api) => {
                 match api.open_path(CString::new(path.to_string().as_str()).unwrap().as_c_str()) {
@@ -291,7 +291,7 @@ impl Hid {
     }
 
     #[func]
-    fn get_manufacturer_string(&self) -> GodotString {
+    fn get_manufacturer_string(&self) -> GString {
         if let Some(ref dev) = self.dev {
             if let Ok(manufacturer_string) = dev.get_manufacturer_string() {
                 if let Some(manufacturer_string) = manufacturer_string {
@@ -309,7 +309,7 @@ impl Hid {
     }
 
     #[func]
-    fn get_product_string(&self) -> GodotString {
+    fn get_product_string(&self) -> GString {
         if let Some(ref dev) = self.dev {
             if let Ok(product_string) = dev.get_product_string() {
                 if let Some(product_string) = product_string {
@@ -327,7 +327,7 @@ impl Hid {
     }
 
     #[func]
-    fn get_serial_number_string(&self) -> GodotString {
+    fn get_serial_number_string(&self) -> GString {
         if let Some(ref dev) = self.dev {
             if let Ok(serial_number_string) = dev.get_serial_number_string() {
                 if let Some(serial_number_string) = serial_number_string {
@@ -345,7 +345,7 @@ impl Hid {
     }
 
     #[func]
-    fn get_indexed_string(&self, index: i32) -> GodotString {
+    fn get_indexed_string(&self, index: i32) -> GString {
         if let Some(ref dev) = self.dev {
             if let Ok(indexed_string) = dev.get_indexed_string(index) {
                 if let Some(indexed_string) = indexed_string {
