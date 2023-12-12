@@ -1,5 +1,5 @@
 # Action name
-name: Deploy
+name: Release
 
 # 触发条件，这里是新的 tag 被 push 时触发
 on:
@@ -23,21 +23,28 @@ jobs:
       # 配置编译目标平台，这里是在 Ubuntu, MacOS, Windows 上分别编译
       matrix:
         include:
-          - name: Linux (GCC)
+          - name: Linux (x64)
             platform: linux
             arch: x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             features: "linux-shared-hidraw"
 
-          - name: MacOS (CLANG)
+          - name: MacOS (x64)
             platform: macos
             arch: x86_64
             os: macos-latest
             target: x86_64-apple-darwin
             features: ""
         
-          - name: Windows (MSVC)
+          - name: MacOS (aarch64)
+            platform: macos
+            arch: aarch64
+            os: macos-13-arm64
+            target: aarch64-apple-darwin
+            features: ""
+        
+          - name: Windows (x64)
             platform: windows
             arch: x86_64
             os: windows-latest
@@ -85,41 +92,37 @@ jobs:
           command: build
           args: --verbose --target ${{ matrix.target }}
 
-      - name: Build binary files (release)
-        uses: actions-rs/cargo@v1
-        with:
-          # use-cross: true
-          command: build
-          args: --verbose --release --target ${{ matrix.target }}
-
       # 打包上传二进制文件
-      - name: Archive files
+      - name: Archive files (debug)
         shell: bash
         run: |
           addon_name="hid"
-          bin_dir="addons/$addon_name/bin"
+          bin_dir="debug_build/addons/$addon_name/bin"
           bin_name="${addon_name}_ext"
           
           mkdir -p $bin_dir
-
           if [ "${{ matrix.platform }}" = "linux" ]; then
+            tree target/${{ matrix.target }}/debug/
+
             bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.so"
-            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.so"
-
             mv target/${{ matrix.target }}/debug/lib$bin_name.so $bin_dir/$bin_file_debug
-            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file_release
-          elif [ "${{ matrix.platform }}" = "macos" ]; then
-            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dylib"
-            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dylib"
 
+            debug_info="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.so.dwp"
+            mv target/${{ matrix.target }}/debug/lib$bin_name.so.dwp $bin_dir/$debug_info
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
+            tree target/${{ matrix.target }}/debug/
+
+            bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dylib"
             mv target/${{ matrix.target }}/debug/lib$bin_name.dylib $bin_dir/$bin_file_debug
-            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file_release
+
+            debug_info="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dylib.dSYM"
+            mv target/${{ matrix.target }}/debug/deps/lib$bin_name.dylib.dSYM $bin_dir/$debug_info
           elif [ "${{ matrix.platform }}" = "windows" ]; then
             bin_file_debug="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.dll"
-            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dll"
-
             mv target/${{ matrix.target }}/debug/$bin_name.dll $bin_dir/$bin_file_debug
-            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file_release
+
+            debug_info="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.debug.pdb"
+            mv target/${{ matrix.target }}/debug/$bin_name.pdb $bin_dir/$debug_info
           else
             echo "Unsupported platform: ${{ matrix.platform }}"
           fi
@@ -131,22 +134,81 @@ jobs:
 
           [libraries]
           ${{ matrix.platform }}.debug.${{ matrix.arch }} = "bin/$bin_file_debug"
+
+          EOF
+
+          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-debug-${{ matrix.arch }}"
+
+          cd debug_build
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            7z a "../$archive_name.zip" "addons"
+            echo "ASSET_DEBUG=$archive_name.zip" >> $GITHUB_ENV
+          else
+            tree addons
+            tar -czvf "../$archive_name.tar.gz" "addons"
+            echo "ASSET_DEBUG=$archive_name.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Release files (debug)
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ASSET_DEBUG }}
+
+      # 构建二进制文件
+      - name: Build binary files (release)
+        uses: actions-rs/cargo@v1
+        with:
+          # use-cross: true
+          command: build
+          args: --verbose --release --target ${{ matrix.target }}
+
+      # 打包上传二进制文件
+      - name: Archive files (release)
+        shell: bash
+        run: |
+          addon_name="hid"
+          bin_dir="release_build/addons/$addon_name/bin"
+          bin_name="${addon_name}_ext"
+          
+          mkdir -p $bin_dir
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.so"
+            mv target/${{ matrix.target }}/release/lib$bin_name.so $bin_dir/$bin_file_release
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dylib"
+            mv target/${{ matrix.target }}/release/lib$bin_name.dylib $bin_dir/$bin_file_release
+          elif [ "${{ matrix.platform }}" = "windows" ]; then
+            bin_file_release="lib$bin_name.${{ matrix.platform }}.${{ matrix.arch }}.release.dll"
+            mv target/${{ matrix.target }}/release/$bin_name.dll $bin_dir/$bin_file_release
+          else
+            echo "Unsupported platform: ${{ matrix.platform }}"
+          fi
+
+          cat>$bin_dir/../$addon_name.gdextension<<EOF
+          [configuration]
+          entry_symbol = "${addon_name}_ext_init"
+          compatibility_minimum = 4.1
+
+          [libraries]
           ${{ matrix.platform }}.release.${{ matrix.arch }} = "bin/$bin_file_release"
 
           EOF
 
-          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
+          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-release-${{ matrix.arch }}"
+
+          cd release_build
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            7z a "$archive_name.zip" "addons"
-            echo "ASSET=$archive_name.zip" >> $GITHUB_ENV
+            7z a "../$archive_name.zip" "addons"
+            echo "ASSET_RELEASE=$archive_name.zip" >> $GITHUB_ENV
           else
             tree addons
-            tar -czvf "$archive_name.tar.gz" "addons"
-            echo "ASSET=$archive_name.tar.gz" >> $GITHUB_ENV
+            tar -czvf "../$archive_name.tar.gz" "addons"
+            echo "ASSET_RELEASE=$archive_name.tar.gz" >> $GITHUB_ENV
           fi
 
-      - name: Release files
+      - name: Release files (release)
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ${{ env.ASSET }}
+            ${{ env.ASSET_RELEASE }}
