@@ -12,6 +12,9 @@ on:
 permissions:
   contents: write
 
+env:
+  GODOT_VERSION: 4.2
+
 # 实际工作
 jobs:
   build-and-upload:
@@ -40,7 +43,7 @@ jobs:
           - name: MacOS (aarch64)
             platform: macos
             arch: aarch64
-            os: macos-13-arm64
+            os: macos-13-xl
             target: aarch64-apple-darwin
             features: ""
         
@@ -130,7 +133,7 @@ jobs:
           cat>$bin_dir/../$addon_name.gdextension<<EOF
           [configuration]
           entry_symbol = "${addon_name}_ext_init"
-          compatibility_minimum = 4.1
+          compatibility_minimum = ${{ env.GODOT_VERSION }}
 
           [libraries]
           ${{ matrix.platform }}.debug.${{ matrix.arch }} = "bin/$bin_file_debug"
@@ -188,7 +191,7 @@ jobs:
           cat>$bin_dir/../$addon_name.gdextension<<EOF
           [configuration]
           entry_symbol = "${addon_name}_ext_init"
-          compatibility_minimum = 4.1
+          compatibility_minimum = ${{ env.GODOT_VERSION }}
 
           [libraries]
           ${{ matrix.platform }}.release.${{ matrix.arch }} = "bin/$bin_file_release"

@@ -13,7 +13,7 @@ struct Hid {
 }
 
 #[godot_api]
-impl RefCountedVirtual for Hid {
+impl IRefCounted for Hid {
     fn init(base: Base<RefCounted>) -> Self {
         Self { dev: None, base }
     }
