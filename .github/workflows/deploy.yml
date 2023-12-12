@@ -43,7 +43,7 @@ jobs:
           - name: MacOS (aarch64)
             platform: macos
             arch: aarch64
-            os: macos-latest-xlarge
+            os: macos-13-arm64
             target: aarch64-apple-darwin
             features: ""
         
