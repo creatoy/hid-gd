@@ -1,5 +1,5 @@
 # Action name
-name: Release
+name: Deploy
 
 # 触发条件，这里是新的 tag 被 push 时触发
 on:
@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: 4.2
+  GODOT_VERSION: 4.1
 
 # 实际工作
 jobs:
@@ -40,12 +40,12 @@ jobs:
             target: x86_64-apple-darwin
             features: ""
         
-          # - name: MacOS (aarch64)
-          #   platform: macos
-          #   arch: aarch64
-          #   os: macos-latest
-          #   target: aarch64-apple-darwin
-          #   features: ""
+          - name: MacOS (arm64)
+            platform: macos
+            arch: aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            features: ""
         
           - name: Windows (x64)
             platform: windows
@@ -136,11 +136,11 @@ jobs:
           compatibility_minimum = ${{ env.GODOT_VERSION }}
 
           [libraries]
-          ${{ matrix.platform }}.debug.${{ matrix.arch }} = "bin/$bin_file_debug"
+          ${{ matrix.platform }}.${{ matrix.arch }}.debug = "bin/$bin_file_debug"
 
           EOF
 
-          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-debug-${{ matrix.arch }}"
+          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}-debug"
 
           cd debug_build
           if [ "${{ matrix.platform }}" = "windows" ]; then
@@ -194,11 +194,11 @@ jobs:
           compatibility_minimum = ${{ env.GODOT_VERSION }}
 
           [libraries]
-          ${{ matrix.platform }}.release.${{ matrix.arch }} = "bin/$bin_file_release"
+          ${{ matrix.platform }}.${{ matrix.arch }} = "bin/$bin_file_release"
 
           EOF
 
-          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-release-${{ matrix.arch }}"
+          archive_name="$addon_name-${{ env.VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}-release"
 
           cd release_build
           if [ "${{ matrix.platform }}" = "windows" ]; then

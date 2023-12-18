@@ -13,5 +13,9 @@ crate-type = ["cdylib"]
 hidapi = "2.4.1"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
 
+[patch."https://github.com/godot-rust/godot4-prebuilt".godot4-prebuilt]
+git = "https://github.com//godot-rust/godot4-prebuilt"
+branch = "4.1"
+
 [profile.dev]
 split-debuginfo = "packed"
